@@ -469,9 +469,11 @@ class Controller(object):
             atexit.register(lambda: ai2thor.docker.kill_container(self.container_id))
         else:
             command = self.unity_command(width, height)
+            print("starting unity with command %s" % command)
             proc = subprocess.Popen(command, env=env)
             self.unity_pid = proc.pid
             atexit.register(lambda: proc.kill())
+            print("unity started with pid %s" % self.unity_pid)
             returncode = proc.wait()
             if returncode != 0:
                 raise Exception("command: %s exited with %s" % (command, returncode))
@@ -583,9 +585,11 @@ class Controller(object):
             threaded=enable_remote_viewer)
 
         _, port = self.server.wsgi_server.socket.getsockname()
+        print("server listening on port %s" % port)
         if enable_remote_viewer:
             print("Remote viewer: http://%s:%s/viewer" % (remote_viewer_host, port))
 
+        print("starting server thread")
         self.server_thread = threading.Thread(target=self._start_server_thread)
 
         self.server_thread.daemon = True
@@ -614,7 +618,9 @@ class Controller(object):
             unity_thread.start()
 
         # receive the first request
+        print("waiting on queue get")
         self.last_event = queue_get(self.request_queue)
+        print("received event from queue")
 
         return self.last_event
 

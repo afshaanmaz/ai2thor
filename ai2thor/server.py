@@ -214,41 +214,54 @@ class Server(object):
         @app.route('/train', methods=['post'])
         def train():
 
-            if request.headers['Content-Type'].split(';')[0] == 'multipart/form-data':
-                form = MultipartFormParser(request.get_data(), MultipartFormParser.get_boundary(request.headers))
-            else:
-                form = request
+            try:
+                print("received request into train")
+                if request.headers['Content-Type'].split(';')[0] == 'multipart/form-data':
+                    form = MultipartFormParser(request.get_data(), MultipartFormParser.get_boundary(request.headers))
+                else:
+                    form = request
 
-            if self.client_token:
-                token = form.form['token']
-                if token is None or token != self.client_token:
-                    abort(403)
+                if self.client_token:
+                    token = form.form['token']
+                    if token is None or token != self.client_token:
+                        abort(403)
 
-            if self.frame_counter % self.debug_frames_per_interval == 0:
-                now = time.time()
-                rate = self.debug_frames_per_interval / float(now - self.last_rate_timestamp)
-                # print("%s %s/s" % (datetime.datetime.now().isoformat(), rate))
-                self.last_rate_timestamp = now
+                if self.frame_counter % self.debug_frames_per_interval == 0:
+                    now = time.time()
+                    rate = self.debug_frames_per_interval / float(now - self.last_rate_timestamp)
+                    # print("%s %s/s" % (datetime.datetime.now().isoformat(), rate))
+                    self.last_rate_timestamp = now
 
-            metadata = json.loads(form.form['metadata'])
-            if metadata['sequenceId'] != self.sequence_id:
-                raise Exception("Sequence id mismatch: %s vs %s" % (
-                    metadata['sequenceId'], self.sequence_id))
+                print("loading json")
+                metadata = json.loads(form.form['metadata'])
+                if metadata['sequenceId'] != self.sequence_id:
+                    raise Exception("Sequence id mismatch: %s vs %s" % (
+                        metadata['sequenceId'], self.sequence_id))
 
-            self.last_event = event = Event(metadata, form.files['image'])
-            request_queue.put_nowait(event)
-            self.frame_counter += 1
+                print("constructing event")
+                self.last_event = event = Event(metadata, form.files['image'])
+                print("putting event on queue")
+                request_queue.put_nowait(event)
+                self.frame_counter += 1
 
-            next_action = queue_get(response_queue)
-            if 'sequenceId' not in next_action:
-                self.sequence_id += 1
-                next_action['sequenceId'] = self.sequence_id
-            else:
-                self.sequence_id = next_action['sequenceId']
+                print("waiting for response queue")
+                next_action = queue_get(response_queue)
+                print("got next action")
+                if 'sequenceId' not in next_action:
+                    self.sequence_id += 1
+                    next_action['sequenceId'] = self.sequence_id
+                else:
+                    self.sequence_id = next_action['sequenceId']
 
-            resp = make_response(json.dumps(next_action))
+                print("making response")
+                resp = make_response(json.dumps(next_action))
 
-            return resp
+
+                print("returning response to Unity")
+                return resp
+            except Exception as e:
+                print("caught exception in train %s" % e)
+                raise e
 
     def start(self):
         self.wsgi_server.serve_forever()
